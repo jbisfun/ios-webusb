@@ -42,5 +42,5 @@ sudo systemctl mask --now usbmuxd
 
 - Builds for `wasm32-unknown-unknown` with nusb's WebUSB backend. On that target, the daemon, Wi-Fi and filesystem parts are compiled out. Tasks run on the page's event loop (`rt.rs`). WebUSB handles are marked `Send` because wasm without atomics is single-threaded.
 - `preflight_with_buid` lets the host supply its own SystemBUID.
-- `idevice` is pinned to `=0.1.68` (Jimpactor's pin).
+- `idevice` is pinned to `=0.1.68` exactly (`=`), because the vendored code is written against that release.
 - The lockdown directory can be set with `rusbmux::handler::set_lockdown_path`, so the native daemon runs unprivileged.
