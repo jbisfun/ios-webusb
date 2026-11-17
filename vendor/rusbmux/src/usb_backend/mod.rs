@@ -40,6 +40,73 @@ pub const DEFAULT_BACKEND: nusb::NusbBackend = nusb::NusbBackend;
 ))]
 pub const DEFAULT_BACKEND: rusb::RusbBackend = rusb::RusbBackend;
 
+// wasm32 without atomics runs everything on the page's single thread, so the WebUSB
+// handles nusb wraps (JS objects, `!Send`) can never actually cross threads.
+#[cfg(all(target_arch = "wasm32", target_feature = "atomics"))]
+compile_error!("the WebUSB build assumes single-threaded wasm32");
+
+#[cfg(target_arch = "wasm32")]
+mod single_thread {
+    use std::{
+        future::Future,
+        pin::Pin,
+        task::{Context, Poll},
+    };
+
+    unsafe impl Send for super::AnyEndpointReader {}
+    unsafe impl Sync for super::AnyEndpointReader {}
+    unsafe impl Send for super::AnyEndpointWriter {}
+    unsafe impl Sync for super::AnyEndpointWriter {}
+    unsafe impl Send for super::AnyDeviceHandle {}
+    unsafe impl Sync for super::AnyDeviceHandle {}
+    unsafe impl Send for super::AnyDeviceInfo {}
+    unsafe impl Sync for super::AnyDeviceInfo {}
+
+    pub struct AssertSend<F>(pub F);
+
+    unsafe impl<F> Send for AssertSend<F> {}
+
+    impl<F: Future> Future for AssertSend<F> {
+        type Output = F::Output;
+
+        fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<F::Output> {
+            // Structural pinning of the only field.
+            unsafe { self.map_unchecked_mut(|this| &mut this.0) }.poll(cx)
+        }
+    }
+
+    impl<S: futures_lite::Stream> futures_lite::Stream for AssertSend<S> {
+        type Item = S::Item;
+
+        fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<S::Item>> {
+            unsafe { self.map_unchecked_mut(|this| &mut this.0) }.poll_next(cx)
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn local_stream<S: Stream>(stream: S) -> single_thread::AssertSend<S> {
+    single_thread::AssertSend(stream)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn local_stream<S: Stream>(stream: S) -> S {
+    stream
+}
+
+/// Lets a WebUSB future be awaited inside the `Send` futures idevice requires.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn local<F: std::future::IntoFuture>(
+    future: F,
+) -> single_thread::AssertSend<F::IntoFuture> {
+    single_thread::AssertSend(future.into_future())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn local<F: std::future::IntoFuture>(future: F) -> F::IntoFuture {
+    future.into_future()
+}
+
 pub type BoxStream<T> = Pin<Box<dyn Stream<Item = T> + Send>>;
 
 pub const APPLE_VID: u16 = 0x5ac;
@@ -230,7 +297,10 @@ impl AnyDeviceInfo {
     pub fn speed(&self) -> Option<u64> {
         match self {
             #[cfg(feature = "nusb")]
+            #[cfg(not(target_arch = "wasm32"))]
             Self::Nusb(info) => info.speed().map(crate::utils::nusb_speed_to_number),
+            #[cfg(target_arch = "wasm32")]
+            Self::Nusb(_) => None,
             #[cfg(feature = "rusb")]
             Self::Rusb(dev) => {
                 let speed = dev.speed();
@@ -259,7 +329,7 @@ impl AnyDeviceInfo {
                     info.location_id()
                 }
 
-                #[cfg(windows)]
+                #[cfg(any(windows, target_arch = "wasm32"))]
                 {
                     0
                 }
@@ -290,7 +360,7 @@ impl AnyDeviceInfo {
                     info.busnum()
                 }
 
-                #[cfg(any(windows, target_os = "macos"))]
+                #[cfg(any(windows, target_os = "macos", target_arch = "wasm32"))]
                 {
                     0
                 }
@@ -303,7 +373,10 @@ impl AnyDeviceInfo {
     pub fn device_address(&self) -> u8 {
         match self {
             #[cfg(feature = "nusb")]
+            #[cfg(not(target_arch = "wasm32"))]
             Self::Nusb(info) => info.device_address(),
+            #[cfg(target_arch = "wasm32")]
+            Self::Nusb(_) => 0,
             #[cfg(feature = "rusb")]
             Self::Rusb(dev) => dev.address(),
         }

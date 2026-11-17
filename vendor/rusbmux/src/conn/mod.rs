@@ -1,13 +1,16 @@
 use std::sync::Arc;
 
+#[cfg(not(target_arch = "wasm32"))]
 pub mod network;
 pub mod usb;
 
 use crate::{device::ConnectionType, error::RusbmuxError};
+#[cfg(not(target_arch = "wasm32"))]
 pub use network::NetworkDeviceConn;
 pub use usb::UsbDeviceConn;
 
 pub enum DeviceConn {
+    #[cfg(not(target_arch = "wasm32"))]
     Network(NetworkDeviceConn),
     Usb(Arc<UsbDeviceConn>),
 }
@@ -30,9 +33,11 @@ impl DeviceConn {
     pub const fn connection_type(&self) -> ConnectionType {
         match self {
             Self::Usb(_) => ConnectionType::Usb,
+            #[cfg(not(target_arch = "wasm32"))]
             Self::Network(_) => ConnectionType::Network,
         }
     }
+    #[cfg(not(target_arch = "wasm32"))]
     pub const fn as_network(&mut self) -> Option<&mut NetworkDeviceConn> {
         if let Self::Network(dev) = self {
             Some(dev)
@@ -41,6 +46,7 @@ impl DeviceConn {
         }
     }
 
+    #[cfg_attr(target_arch = "wasm32", allow(irrefutable_let_patterns))]
     pub const fn as_usb(&self) -> Option<&Arc<UsbDeviceConn>> {
         if let Self::Usb(dev) = self {
             Some(dev)
@@ -52,6 +58,7 @@ impl DeviceConn {
     pub fn device_id(&self) -> u64 {
         match self {
             Self::Usb(dev) => dev.device_core.id,
+            #[cfg(not(target_arch = "wasm32"))]
             Self::Network(dev) => dev.device_id,
         }
     }
@@ -59,6 +66,7 @@ impl DeviceConn {
     pub fn destination_port(&self) -> u16 {
         match self {
             Self::Usb(dev) => dev.destination_port,
+            #[cfg(not(target_arch = "wasm32"))]
             Self::Network(dev) => dev.destination_port,
         }
     }
@@ -77,6 +85,7 @@ impl DeviceConn {
     pub async fn close(&self) -> Result<(), RusbmuxError> {
         match self {
             Self::Usb(dev) => dev.close().await,
+            #[cfg(not(target_arch = "wasm32"))]
             Self::Network(_) => Ok(()),
         }
     }
@@ -105,6 +114,7 @@ impl DeviceConn {
     pub async fn wait_shutdown(&self) -> Result<(), RusbmuxError> {
         match self {
             Self::Usb(dev) => dev.wait_shutdown().await?,
+            #[cfg(not(target_arch = "wasm32"))]
             Self::Network(dev) => dev.wait_shutdown().await,
         }
         Ok(())

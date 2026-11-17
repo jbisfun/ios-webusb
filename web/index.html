@@ -1,0 +1,67 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>ios-webusb</title>
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 2rem; max-width: 50rem; }
+  button { margin-right: .5rem; }
+  pre { background: #f4f4f4; padding: 1rem; overflow: auto; }
+</style>
+<h1>ios-webusb</h1>
+<p>
+  <button id="connect">Connect device</button>
+  <button id="pair" disabled>Pair</button>
+  <button id="info" disabled>Device info</button>
+</p>
+<pre id="log"></pre>
+<script type="module">
+  import init, { IosDevice } from "./pkg/ios_webusb_web.js";
+
+  await init();
+  const log = (line) => (document.querySelector("#log").textContent += `${line}\n`);
+  const bytes = (base64) => base64 && Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  const base64 = (data) => btoa(String.fromCharCode(...data));
+
+  // This page acts as one host: one SystemBUID, one pair record per device.
+  const buid = localStorage.buid ??= crypto.randomUUID().toUpperCase();
+  let device;
+
+  const use = (found) => {
+    device = found;
+    log(`Connected ${device.udid}`);
+    document.querySelector("#pair").disabled = false;
+    document.querySelector("#info").disabled = false;
+  };
+
+  const [granted] = await IosDevice.authorized().catch(() => []);
+  if (granted) use(granted);
+
+  document.querySelector("#connect").onclick = async () => {
+    try {
+      const found = await IosDevice.request();
+      if (found) use(found);
+    } catch (error) {
+      log(`Connect failed: ${error.message}`);
+    }
+  };
+
+  document.querySelector("#pair").onclick = async () => {
+    log("Pairing: unlock the device and tap Trust if asked");
+    try {
+      const key = `pair:${device.udid}`;
+      const created = await device.pair(bytes(localStorage[key]), buid);
+      if (created) localStorage[key] = base64(created);
+      log(created ? "Paired" : "Already paired");
+    } catch (error) {
+      log(`Pairing failed: ${error.message}`);
+    }
+  };
+
+  document.querySelector("#info").onclick = async () => {
+    try {
+      const values = await device.getValue();
+      log(JSON.stringify(values, null, 2));
+    } catch (error) {
+      log(`getValue failed: ${error.message}`);
+    }
+  };
+</script>

@@ -1,4 +1,6 @@
-use std::{io::ErrorKind, sync::Arc};
+#[cfg(not(target_arch = "wasm32"))]
+use std::io::ErrorKind;
+use std::sync::Arc;
 
 use idevice::{
     IdeviceError, IdeviceService,
@@ -6,19 +8,19 @@ use idevice::{
     provider::IdeviceProvider,
     services::{lockdown::LockdownClient, notification_proxy::NotificationProxyClient},
 };
-use tracing::{debug, error, warn};
+#[cfg(not(target_arch = "wasm32"))]
+use tracing::error;
+use tracing::{debug, warn};
 
-use crate::{
-    device::usb::UsbDevice,
-    error::RusbmuxError,
-    handler::{lockdown_path, read_buid::read_system_buid},
-    provider::RusbmuxProvider,
-};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::handler::{lockdown_path, read_buid::read_system_buid};
+use crate::{device::usb::UsbDevice, error::RusbmuxError, provider::RusbmuxProvider};
 
 const INSECURE_NOTIFICATION_PROXY: &str = "com.apple.mobile.insecure_notification_proxy";
 const REQUEST_PAIR: &str = "com.apple.mobile.lockdown.request_pair";
 const REQUEST_HOST_BUID: &str = "com.apple.mobile.lockdown.request_host_buid";
 
+#[cfg(not(target_arch = "wasm32"))]
 pub(super) fn spawn(device: Arc<UsbDevice>) {
     tokio::spawn(async move {
         let canceler = device.core.canceler.clone();
@@ -31,6 +33,7 @@ pub(super) fn spawn(device: Arc<UsbDevice>) {
     });
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 async fn run(device: Arc<UsbDevice>) -> Result<(), RusbmuxError> {
     let path = lockdown_path().join(format!("{}.plist", device.udid));
 
@@ -60,9 +63,21 @@ async fn run(device: Arc<UsbDevice>) -> Result<(), RusbmuxError> {
     Ok(())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn preflight(
     device: Arc<UsbDevice>,
     pairing_file: Option<PairingFile>,
+) -> Result<Option<PairingFile>, RusbmuxError> {
+    let system_buid = read_system_buid().await?;
+    preflight_with_buid(device, pairing_file, system_buid).await
+}
+
+/// Validates `pairing_file`, or pairs (waiting for the Trust dialog) as the host
+/// identified by `system_buid`. Returns the new pairing file when one was created.
+pub async fn preflight_with_buid(
+    device: Arc<UsbDevice>,
+    pairing_file: Option<PairingFile>,
+    system_buid: String,
 ) -> Result<Option<PairingFile>, RusbmuxError> {
     let provider = RusbmuxProvider::new(device, "rusbmux-preflight".to_string());
 
@@ -93,7 +108,6 @@ pub async fn preflight(
         }
     }
 
-    let system_buid = read_system_buid().await?;
     let host_id = uuid::Uuid::new_v4().to_string().to_uppercase();
 
     lockdown
@@ -193,7 +207,7 @@ async fn wait_for_pair_request(
             // break the preflight task if the pairing got denied
             //
             // TODO: is this a problem?
-            _ = tokio::time::sleep(tokio::time::Duration::from_secs(30)) => {
+            _ = crate::rt::sleep(std::time::Duration::from_secs(30)) => {
                 if let Err(err @ IdeviceError::UserDeniedPairing) = lockdown.pair_once(host_id, system_buid, None).await {
                     debug!("User denied pairing, cancelling preflight");
                     break Err(RusbmuxError::Idevice(err));

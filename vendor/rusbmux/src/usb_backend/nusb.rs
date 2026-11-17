@@ -21,7 +21,7 @@ pub struct NusbBackend;
 impl UsbBackend for NusbBackend {
     #[inline]
     async fn list_devices(&self) -> Vec<AnyDeviceInfo> {
-        match nusb::list_devices().await {
+        match super::local(nusb::list_devices()).await {
             Ok(devices) => devices
                 .filter(|dev| {
                     let is_apple = dev.vendor_id() == APPLE_VID;
@@ -68,7 +68,7 @@ async fn watch_usb() -> Result<BoxStream<Result<Event, RusbmuxError>>, RusbmuxEr
             Some(event)
         });
 
-    Ok(Box::pin(async_stream::try_stream! {
+    Ok(Box::pin(super::local_stream(async_stream::try_stream! {
         let current_connected_devices = NusbBackend.list_devices().await;
 
         for device_info in current_connected_devices {
@@ -94,7 +94,7 @@ async fn watch_usb() -> Result<BoxStream<Result<Event, RusbmuxError>>, RusbmuxEr
                 }
             }
         }
-    }))
+    })))
 }
 
 pub(crate) async fn device_endpoints(
@@ -166,12 +166,10 @@ pub(crate) async fn device_endpoints(
             }
         }
 
-        dev.set_configuration(intf_cfg_num).await?;
+        super::local(dev.set_configuration(intf_cfg_num)).await?;
     }
 
-    let intf = dev
-        .claim_interface(interface_descriptor.interface_number())
-        .await?;
+    let intf = super::local(dev.claim_interface(interface_descriptor.interface_number())).await?;
 
     let end_out = interface_descriptor
         .endpoints()

@@ -1,22 +1,34 @@
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::LazyLock;
 
+#[cfg(not(target_arch = "wasm32"))]
 use dashmap::DashMap;
 
+#[cfg(not(target_arch = "wasm32"))]
 use tokio::sync::{OnceCell, broadcast};
 
+#[cfg(not(target_arch = "wasm32"))]
 mod network;
 mod preflight;
+#[cfg(not(target_arch = "wasm32"))]
 mod usb;
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::{
     device::{ConnectionType, Device},
     error::RusbmuxError,
 };
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) use network::watch_network_daemon;
+#[cfg(not(target_arch = "wasm32"))]
 pub use network::{NetworkEvent, watch_network};
 
+#[cfg(not(target_arch = "wasm32"))]
 pub use preflight::preflight;
+pub use preflight::preflight_with_buid;
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) use usb::watch_usb_daemon;
+#[cfg(not(target_arch = "wasm32"))]
 pub use usb::{UsbEvent, watch_usb};
 
 /// a channel used for hotplug events, once a device is connected it gets broadcasted to all it's
@@ -24,19 +36,23 @@ pub use usb::{UsbEvent, watch_usb};
 ///
 /// it only sends the device id, the device it self is stored in
 /// `CONNECTED_DEVICES`
+#[cfg(not(target_arch = "wasm32"))]
 pub static HOTPLUG_EVENT_TX: OnceCell<broadcast::Sender<DeviceEvent>> = OnceCell::const_new();
 
 /// has the currently connected devices with it's corresponding idevice id
 ///
 /// devices are pushed to it whenever a device is connected, and removed once the device is removed
+#[cfg(not(target_arch = "wasm32"))]
 pub static CONNECTED_DEVICES: LazyLock<DashMap<u64, Device>> = LazyLock::new(DashMap::new);
 
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug, Clone)]
 pub enum DeviceEvent {
     Attached { id: u64 },
     Detached { id: u64 },
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl std::fmt::Display for DeviceEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -46,6 +62,7 @@ impl std::fmt::Display for DeviceEvent {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Removes the device from the connected devices and shut it down
 pub async fn remove_device(id: u64) -> Result<Device, RusbmuxError> {
     let (_, device) = CONNECTED_DEVICES
@@ -104,6 +121,7 @@ pub async fn remove_device(id: u64) -> Result<Device, RusbmuxError> {
     Ok(device)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[inline]
 pub async fn get_hotplug_event_tx() -> &'static broadcast::Sender<DeviceEvent> {
     HOTPLUG_EVENT_TX

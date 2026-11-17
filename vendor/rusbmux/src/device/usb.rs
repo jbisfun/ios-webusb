@@ -8,7 +8,7 @@ use crossfire::{AsyncRx, MAsyncTx, mpsc};
 use dashmap::DashMap;
 use etherparse::TcpHeader;
 use pack1::U16BE;
-use tokio::{io::AsyncWriteExt, sync::OnceCell, task::JoinHandle};
+use tokio::{io::AsyncWriteExt, sync::OnceCell};
 use tracing::{debug, error, info, trace, warn};
 
 use crate::{
@@ -45,8 +45,8 @@ pub struct UsbDevice {
     pub router: Arc<PacketRouter>,
     pub conns: DashMap<u16, Weak<UsbDeviceConn>>,
 
-    reader_loop_handler: OnceCell<JoinHandle<()>>,
-    writer_loop_handler: OnceCell<JoinHandle<()>>,
+    reader_loop_handler: OnceCell<crate::rt::Task>,
+    writer_loop_handler: OnceCell<crate::rt::Task>,
 
     dropped: AtomicBool,
 }
@@ -94,7 +94,7 @@ impl UsbDevice {
         let device1 = Arc::clone(&device);
         let device2 = Arc::clone(&device);
 
-        let reader_loop_handler = tokio::spawn(async move {
+        let reader_loop_handler = crate::rt::spawn(async move {
             tokio::select! {
                 _ = device1.start_reader_loop(end_in, id) => {}
                 _ = device1.core.canceler.cancelled() => {}
@@ -104,7 +104,7 @@ impl UsbDevice {
         // let reader_loop_handler =
         //     tokio::spawn(Self::start_reader_loop(Arc::clone(&device), end_in, id));
 
-        let writer_loop_handler = tokio::spawn(async move {
+        let writer_loop_handler = crate::rt::spawn(async move {
             tokio::select! {
                 _ = device2.start_writer_loop(rx, end_out, id) => {}
                 _ = device2.core.canceler.cancelled() => {}
@@ -196,14 +196,14 @@ impl UsbDevice {
         let device1 = Arc::clone(&device);
         let device2 = Arc::clone(&device);
 
-        let reader_loop_handler = tokio::spawn(async move {
+        let reader_loop_handler = crate::rt::spawn(async move {
             tokio::select! {
                 _ = device1.start_reader_loop(end_in, id) => {}
                 _ = device1.core.canceler.cancelled() => {}
             }
         });
 
-        let writer_loop_handler = tokio::spawn(async move {
+        let writer_loop_handler = crate::rt::spawn(async move {
             tokio::select! {
                 _ = device2.start_writer_loop(rx, end_out, id) => {}
                 _ = device2.core.canceler.cancelled() => {}

@@ -1,17 +1,23 @@
 pub mod core;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod network;
 pub mod packet_router;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod power_assertion;
 pub mod usb;
-use std::{borrow::Cow, net::IpAddr, sync::Arc};
+use std::{borrow::Cow, sync::Arc};
 
+#[cfg(not(target_arch = "wasm32"))]
 use network::NetworkDevice;
+#[cfg(not(target_arch = "wasm32"))]
+use std::net::IpAddr;
 use usb::UsbDevice;
 
 use crate::{conn::DeviceConn, error::RusbmuxError, usb_backend::AnyDeviceInfo};
 
 #[derive(Debug)]
 pub enum Device {
+    #[cfg(not(target_arch = "wasm32"))]
     Network(NetworkDevice),
     Usb(Arc<UsbDevice>),
 }
@@ -27,6 +33,7 @@ impl Device {
     pub const fn connection_type(&self) -> ConnectionType {
         match self {
             Self::Usb(_) => ConnectionType::Usb,
+            #[cfg(not(target_arch = "wasm32"))]
             Self::Network(_) => ConnectionType::Network,
         }
     }
@@ -34,6 +41,7 @@ impl Device {
     #[must_use]
     pub fn id(&self) -> u64 {
         match self {
+            #[cfg(not(target_arch = "wasm32"))]
             Self::Network(dev) => dev.core.id,
             Self::Usb(dev) => dev.core.id,
         }
@@ -41,6 +49,7 @@ impl Device {
 
     pub fn udid(&self) -> Cow<'_, str> {
         match self {
+            #[cfg(not(target_arch = "wasm32"))]
             Self::Network(dev) => Cow::Borrowed(&dev.udid),
             Self::Usb(dev) => Cow::Borrowed(&dev.udid),
         }
@@ -50,6 +59,7 @@ impl Device {
         Ok(Self::Usb(UsbDevice::new(info, id).await?))
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn new_network(
         id: u64,
         addr: (IpAddr, Option<IpAddr>),
@@ -66,6 +76,7 @@ impl Device {
     pub async fn shutdown(&self) -> Result<(), RusbmuxError> {
         match self {
             Self::Usb(dev) => dev.shutdown().await?,
+            #[cfg(not(target_arch = "wasm32"))]
             Self::Network(dev) => dev.shutdown(),
         }
 
@@ -75,10 +86,12 @@ impl Device {
     pub async fn connect(&self, destination_port: u16) -> Result<DeviceConn, RusbmuxError> {
         match self {
             Self::Usb(dev) => dev.connect(destination_port).await.map(DeviceConn::Usb),
+            #[cfg(not(target_arch = "wasm32"))]
             Self::Network(dev) => dev.connect(destination_port).await.map(DeviceConn::Network),
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[must_use]
     pub const fn as_network(&self) -> Option<&NetworkDevice> {
         if let Self::Network(dev) = self {
@@ -89,6 +102,7 @@ impl Device {
     }
 
     #[must_use]
+    #[cfg_attr(target_arch = "wasm32", allow(irrefutable_let_patterns))]
     pub const fn as_usb(&self) -> Option<&Arc<UsbDevice>> {
         if let Self::Usb(dev) = self {
             Some(dev)
@@ -100,6 +114,7 @@ impl Device {
     pub fn create_device_attached(&self) -> Result<plist::Value, RusbmuxError> {
         match self {
             Self::Usb(dev) => dev.create_device_attached(),
+            #[cfg(not(target_arch = "wasm32"))]
             Self::Network(dev) => dev.create_device_attached(),
         }
     }

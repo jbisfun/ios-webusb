@@ -1,10 +1,8 @@
-mod bridge;
 mod devices;
 mod state;
 mod tray;
 mod ui;
 
-use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -13,8 +11,6 @@ use tokio::sync::mpsc;
 
 use state::{Paths, State};
 
-const DEFAULT_BRIDGE: &str = "127.0.0.1:27150";
-
 fn paths() -> anyhow::Result<Paths> {
     let data = dirs::data_dir()
         .context("no data directory")?
@@ -22,20 +18,11 @@ fn paths() -> anyhow::Result<Paths> {
     let runtime = dirs::runtime_dir()
         .map(|dir| dir.join("ios-webusb"))
         .unwrap_or_else(|| data.clone());
-    let config = dirs::config_dir()
-        .context("no config directory")?
-        .join("ios-webusb");
-    let bridge: SocketAddr = std::env::var("IOS_WEBUSB_ADDRESS")
-        .unwrap_or_else(|_| DEFAULT_BRIDGE.into())
-        .parse()
-        .context("IOS_WEBUSB_ADDRESS must be host:port")?;
     Ok(Paths {
         socket: std::env::var_os("IOS_WEBUSB_SOCKET")
             .map(PathBuf::from)
             .unwrap_or_else(|| runtime.join("usbmuxd")),
         lockdown: data.join("lockdown"),
-        origins: config.join("origins.json"),
-        bridge,
     })
 }
 
@@ -64,13 +51,10 @@ fn main() -> anyhow::Result<()> {
     }
 
     let runtime = tokio::runtime::Runtime::new()?;
-    let listener = runtime
-        .block_on(tokio::net::TcpListener::bind(paths.bridge))
-        .with_context(|| format!("binding the web bridge on {}", paths.bridge))?;
 
     let (ui_tx, ui_rx) = mpsc::unbounded_channel();
     let (device_tx, device_rx) = mpsc::unbounded_channel();
-    let state = State::new(paths, ui_tx, device_tx);
+    let state = State::new(paths, ui_tx, device_tx, runtime.handle().clone());
 
     runtime.spawn({
         let state = state.clone();
@@ -85,13 +69,8 @@ fn main() -> anyhow::Result<()> {
     runtime.block_on(wait_for_socket(&state));
 
     devices::spawn(state.clone(), device_rx);
-    runtime.spawn(bridge::serve(state.clone(), listener));
     runtime.spawn(tray::run(state.clone()));
-    log::info!(
-        "Serving usbmuxd on {} and web apps on {}",
-        state.paths.socket.display(),
-        state.bridge_url()
-    );
+    log::info!("Serving usbmuxd on {}", state.paths.socket.display());
 
     ui::run(state.clone(), ui_rx, show);
 

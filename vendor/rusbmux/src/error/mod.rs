@@ -1,9 +1,8 @@
 use thiserror::Error;
 
-use crate::{
-    parser::{device_mux::UsbDevicePacket, usbmux::UsbMuxResult},
-    watcher::DeviceEvent,
-};
+use crate::parser::{device_mux::UsbDevicePacket, usbmux::UsbMuxResult};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::watcher::DeviceEvent;
 
 #[derive(Debug, Error)]
 pub enum RusbmuxError {
@@ -69,6 +68,7 @@ pub enum ChannelError {
     #[error("Couldn't send a usb packet on the channel")]
     UsbSend(Box<UsbDevicePacket>),
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[error("Couldn't send a broadcast event on the channel, event: {0}")]
     BroadcastSend(DeviceEvent),
 }
@@ -106,6 +106,7 @@ impl From<crossfire::TrySendError<UsbDevicePacket>> for RusbmuxError {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl From<tokio::sync::broadcast::error::SendError<DeviceEvent>> for RusbmuxError {
     fn from(err: tokio::sync::broadcast::error::SendError<DeviceEvent>) -> Self {
         Self::Channel(ChannelError::BroadcastSend(err.0))

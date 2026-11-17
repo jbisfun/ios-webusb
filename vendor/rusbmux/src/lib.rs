@@ -84,9 +84,11 @@ pub mod cli;
 
 pub mod device;
 pub mod error;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod handler;
 pub mod parser;
 pub mod provider;
+pub(crate) mod rt;
 
 #[cfg(any(feature = "rusb", feature = "nusb"))]
 pub mod usb_backend;

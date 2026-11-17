@@ -1,5 +1,5 @@
+use ksni::TrayMethods;
 use ksni::menu::{MenuItem, StandardItem, SubMenu};
-use ksni::{Status, TrayMethods};
 
 use crate::state::{Snapshot, State, Transport};
 
@@ -64,27 +64,11 @@ impl ksni::Tray for Tray {
         "phone-symbolic".into()
     }
 
-    fn attention_icon_name(&self) -> String {
-        "dialog-question-symbolic".into()
-    }
-
-    fn status(&self) -> Status {
-        if self.snapshot.pending.is_empty() {
-            Status::Active
-        } else {
-            Status::NeedsAttention
-        }
-    }
-
     fn tool_tip(&self) -> ksni::ToolTip {
         let devices = self.snapshot.devices.len();
         ksni::ToolTip {
             title: "iOS WebUSB".into(),
-            description: format!(
-                "{devices} device(s), {} web connection(s) on {}",
-                self.snapshot.sessions.len(),
-                self.state.bridge_url()
-            ),
+            description: format!("{devices} device(s)"),
             ..Default::default()
         }
     }
@@ -95,25 +79,6 @@ impl ksni::Tray for Tray {
 
     fn menu(&self) -> Vec<MenuItem<Self>> {
         let mut menu = Vec::new();
-
-        for (id, origin) in &self.snapshot.pending {
-            let id = *id;
-            menu.push(
-                SubMenu {
-                    label: format!("{origin} wants device access"),
-                    submenu: vec![
-                        item("Allow", move |tray: &mut Tray| tray.state.decide(id, true)),
-                        item("Deny", move |tray: &mut Tray| tray.state.decide(id, false)),
-                    ],
-                    ..Default::default()
-                }
-                .into(),
-            );
-        }
-        if !self.snapshot.pending.is_empty() {
-            menu.push(MenuItem::Separator);
-        }
-
         if self.snapshot.devices.is_empty() {
             menu.push(note("No devices"));
         }
@@ -131,6 +96,11 @@ impl ksni::Tray for Tray {
                 if device.paired { "Pair again" } else { "Pair" },
                 move |tray: &mut Tray| tray.state.pair(device_id),
             ));
+            if device.transport == Transport::Usb {
+                submenu.push(item("Release for WebUSB", move |tray: &mut Tray| {
+                    tray.state.release(device_id)
+                }));
+            }
             menu.push(
                 SubMenu {
                     label: format!(
@@ -139,28 +109,6 @@ impl ksni::Tray for Tray {
                         if device.paired { "" } else { ", not paired" }
                     ),
                     submenu,
-                    ..Default::default()
-                }
-                .into(),
-            );
-        }
-
-        if !self.snapshot.allowed.is_empty() {
-            menu.push(MenuItem::Separator);
-            menu.push(
-                SubMenu {
-                    label: "Allowed sites".into(),
-                    submenu: self
-                        .snapshot
-                        .allowed
-                        .iter()
-                        .map(|origin| {
-                            let origin = origin.clone();
-                            item(format!("Revoke {origin}"), move |tray: &mut Tray| {
-                                tray.state.revoke(&origin)
-                            })
-                        })
-                        .collect(),
                     ..Default::default()
                 }
                 .into(),

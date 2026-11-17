@@ -1,10 +1,11 @@
 #[cfg(feature = "nusb")]
 use std::borrow::Cow;
+#[cfg_attr(target_arch = "wasm32", allow(unused_imports))]
 use tracing::warn;
 
 use crate::error::RusbmuxError;
 
-#[cfg(feature = "nusb")]
+#[cfg(all(feature = "nusb", not(target_arch = "wasm32")))]
 pub(crate) fn nusb_speed_to_number(speed: nusb::Speed) -> u64 {
     match speed {
         nusb::Speed::Low => 1_500_000,
@@ -72,6 +73,7 @@ pub(crate) fn is_disconnect_io(err: &std::io::Error) -> bool {
     )
 }
 
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 pub(crate) fn is_disconnect(err: &RusbmuxError) -> bool {
     if let RusbmuxError::IO(io_err) = err {
         return is_disconnect_io(io_err);

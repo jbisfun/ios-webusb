@@ -93,7 +93,7 @@ const SURFACE: u32 = 0x2b2d31;
 const TEXT: u32 = 0xe6e6e6;
 const MUTED: u32 = 0x9a9ca3;
 const ACCENT: u32 = 0x3d6fd9;
-const DANGER: u32 = 0xb5443c;
+const SURFACE_RAISED: u32 = 0x404249;
 
 fn section(title: &'static str) -> Div {
     div()
@@ -133,31 +133,11 @@ fn empty(text: &'static str) -> Div {
 
 impl Render for Panel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let snapshot = &self.snapshot;
-
-        let mut requests = section("Requests");
-        for (id, origin) in &snapshot.pending {
-            let id = *id;
-            requests =
-                requests.child(
-                    row()
-                        .child(div().flex_1().text_sm().child(SharedString::from(format!(
-                            "{origin} wants to connect to your devices"
-                        ))))
-                        .child(button(("allow", id), "Allow", ACCENT).on_click(
-                            cx.listener(move |panel, _, _, _| panel.state.decide(id, true)),
-                        ))
-                        .child(button(("deny", id), "Deny", DANGER).on_click(
-                            cx.listener(move |panel, _, _, _| panel.state.decide(id, false)),
-                        )),
-                );
-        }
-
         let mut devices = section("Devices");
-        if snapshot.devices.is_empty() {
+        if self.snapshot.devices.is_empty() {
             devices = devices.child(empty("Connect an iPhone or iPad over USB"));
         }
-        for device in &snapshot.devices {
+        for device in &self.snapshot.devices {
             let device_id = device.device_id;
             let transport = match device.transport {
                 Transport::Usb => "USB",
@@ -190,34 +170,16 @@ impl Render for Panel {
                             ACCENT,
                         )
                         .on_click(cx.listener(move |panel, _, _, _| panel.state.pair(device_id))),
-                    ),
+                    )
+                    .when(device.transport == Transport::Usb, |row| {
+                        row.child(
+                            button(("release", device_id as u64), "Release", SURFACE_RAISED)
+                                .on_click(cx.listener(move |panel, _, _, _| {
+                                    panel.state.release(device_id)
+                                })),
+                        )
+                    }),
             );
-        }
-
-        let mut sites = section("Allowed sites");
-        if snapshot.allowed.is_empty() {
-            sites = sites.child(empty("Sites you allow appear here"));
-        }
-        for (index, origin) in snapshot.allowed.iter().enumerate() {
-            let connections = snapshot
-                .sessions
-                .iter()
-                .filter(|session| &session.origin == origin)
-                .count();
-            let label = if connections == 0 {
-                origin.clone()
-            } else {
-                format!("{origin} · {connections} open")
-            };
-            let origin = origin.clone();
-            sites =
-                sites.child(
-                    row()
-                        .child(div().flex_1().text_sm().child(SharedString::from(label)))
-                        .child(button(("revoke", index), "Revoke", DANGER).on_click(
-                            cx.listener(move |panel, _, _, _| panel.state.revoke(&origin)),
-                        )),
-                );
         }
 
         div()
@@ -240,14 +202,11 @@ impl Render for Panel {
                             .text_xs()
                             .text_color(rgb(MUTED))
                             .child(SharedString::from(format!(
-                                "Web apps: {} · usbmuxd: {}",
-                                self.state.bridge_url(),
+                                "usbmuxd: {} · Release a device to use it from a web page",
                                 self.state.paths.socket.display()
                             ))),
                     ),
             )
-            .when(!snapshot.pending.is_empty(), |panel| panel.child(requests))
             .child(devices)
-            .child(sites)
     }
 }

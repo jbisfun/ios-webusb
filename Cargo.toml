@@ -3,10 +3,11 @@ name = "ios-webusb"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "WebUSB-style access to iOS devices: a userland usbmuxd with a WebSocket bridge for web apps and a gpui tray"
+description = "Userland usbmuxd for iOS devices with a gpui tray; the WebUSB driver lives in web/"
 repository = "https://github.com/jbisfun/ios-webusb"
 
 [workspace]
+members = [".", "web"]
 
 [[bin]]
 name = "ios-webusb"
@@ -15,20 +16,16 @@ path = "src/main.rs"
 [dependencies]
 # USB driver: vendored rusbmux (idevice bumped to Jimpactor's pin, lockdown dir configurable).
 rusbmux = { path = "vendor/rusbmux" }
-# Jimpactor's device stack.
-plume_utils = { path = "../../projs/jimpactor/crates/utils" }
-idevice = { version = "=0.1.68", default-features = false, features = ["usbmuxd"] }
+# Same idevice pin as Jimpactor.
+idevice = { version = "=0.1.68", default-features = false, features = ["usbmuxd", "pair", "ring"] }
+uuid = { version = "1", features = ["v4"] }
 
 gpui = { path = "../ycode/crates/gpui" }
 gpui_platform = { path = "../ycode/crates/gpui_platform", features = ["wayland", "x11"] }
 ksni = "0.3"
 
 tokio = { version = "1.43", features = ["rt-multi-thread", "net", "sync", "time", "macros", "io-util"] }
-tokio-tungstenite = "0.28"
-futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
-httparse = "1.9"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
 dirs = "6"
 anyhow = "1"
 log = "0.4"

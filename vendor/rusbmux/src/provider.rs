@@ -47,9 +47,26 @@ impl RusbmuxProvider {
     /// automatically checks the pairing file and generate a new one if needed
     ///
     /// returns true if it did generate a new one, false otherwise
+    #[cfg(not(target_arch = "wasm32"))]
     pub async fn preflight(&mut self) -> Result<bool, RusbmuxError> {
         if let Some(pairing_file) =
             crate::watcher::preflight(Arc::clone(&self.device), self.pairing_file.clone()).await?
+        {
+            self.set_pairing_file(pairing_file);
+            return Ok(true);
+        }
+
+        Ok(false)
+    }
+
+    /// Like `preflight`, for hosts that keep their own `SystemBUID` (e.g. a browser).
+    pub async fn preflight_with_buid(&mut self, system_buid: String) -> Result<bool, RusbmuxError> {
+        if let Some(pairing_file) = crate::watcher::preflight_with_buid(
+            Arc::clone(&self.device),
+            self.pairing_file.clone(),
+            system_buid,
+        )
+        .await?
         {
             self.set_pairing_file(pairing_file);
             return Ok(true);

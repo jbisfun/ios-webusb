@@ -1,0 +1,23 @@
+[package]
+name = "ios-webusb-web"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "WebUSB driver for iOS devices: rusbmux + idevice compiled to wasm"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+rusbmux = { path = "../vendor/rusbmux", default-features = false, features = ["nusb"] }
+idevice = { version = "=0.1.68", default-features = false, features = ["wasm", "pair"] }
+nusb = "0.2.9"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+serde-wasm-bindgen = "0.6"
+plist = "1.8"
+serde = "1"
+console_error_panic_hook = "0.1"
+tracing-wasm = "0.2"
