@@ -69,7 +69,13 @@ pub fn inspect_ipa(ipa: &[u8]) -> Result<JsValue, JsError> {
 #[wasm_bindgen(start)]
 fn start() {
     console_error_panic_hook::set_once();
-    tracing_wasm::set_as_global_default();
+    // INFO only: the mux/idevice TRACE output buries real errors (and slows transfers).
+    tracing_wasm::set_as_global_default_with_config(
+        tracing_wasm::WASMLayerConfigBuilder::new()
+            .set_max_level(tracing::Level::INFO)
+            .set_report_logs_in_timings(false)
+            .build(),
+    );
 }
 
 pub(crate) fn js_error(error: impl std::fmt::Display) -> JsError {

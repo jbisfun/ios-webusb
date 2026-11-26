@@ -3622,6 +3622,7 @@ dependencies = [
  "rusbmux",
  "serde",
  "serde-wasm-bindgen",
+ "tracing",
  "tracing-wasm",
  "wasm-bindgen",
  "wasm-bindgen-futures",
