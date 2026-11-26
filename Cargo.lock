@@ -282,13 +282,13 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 [[package]]
 name = "apple-codesign-quick"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "519defc726db80b8a43836bbd6f69eb606a42783db799716a103436042593f0b"
+source = "git+https://github.com/jbisfun/apple-crates?branch=ferry-quick-0.1.0#7464ecef539ea47424a7a92fdc259836635f54a1"
 dependencies = [
  "byteorder",
  "cms 0.2.3",
  "const-oid 0.9.6",
  "der 0.7.10",
+ "isideload-vfs",
  "memmap2",
  "pem-rfc7468 0.7.0",
  "plist",
@@ -299,6 +299,7 @@ dependencies = [
  "sha2 0.11.2",
  "spki 0.7.3",
  "thiserror 2.0.21",
+ "web-time",
  "x509-cert 0.2.5",
 ]
 
@@ -7040,7 +7041,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
