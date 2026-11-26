@@ -16,6 +16,7 @@
 
 use std::path::PathBuf;
 
+use isideload::anisette::AnisetteClientInfo;
 use isideload::anisette::remote_v3::RemoteV3AnisetteProvider;
 use isideload::auth::apple_account::{AppleAccount as Account, TwoFactorCallbackParams, TwoFactorCallbackResponse};
 use isideload::dev::developer_session::DeveloperSession;
@@ -32,6 +33,11 @@ use crate::{IosDevice, js_error};
 
 const DEFAULT_ANISETTE: &str = "https://ani.sidestore.io";
 const MACHINE_NAME: &str = "ferry-webinstaller";
+/// What we tell Apple we are. Public anisette servers report old Macs (e.g. macOS
+/// 10.12), and for those Apple picks SMS 2FA and won't push codes to trusted
+/// devices. A current macOS gets trusted-device 2FA.
+const CLIENT_INFO: &str = "<MacBookPro18,3> <Mac OS X;26.6;25F84> <com.apple.AuthKit/1 (com.apple.akd/1.0)>";
+const USER_AGENT: &str = "AuthKit/1 (Macintosh; OS X 26.6) (com.apple.akd/1.0)";
 
 /// isideload's state (anisette provisioning, the development certificate and its
 /// key, the chosen team) in `localStorage`, under `isideload:<key>`.
@@ -130,7 +136,8 @@ impl AppleAccount {
     /// `twoFactor(params)` (returns the code, `"SendToDevices"` for a new code or null
     /// to abort; codes go to trusted devices, not SMS), `revokeCertificates` (when the account
     /// already has the maximum number of development certificates, revoke the
-    /// oldest instead of failing).
+    /// oldest instead of failing), `clientInfo`/`userAgent` (the device Apple is told
+    /// about; defaults to a current Mac).
     pub async fn login(email: String, password: String, options: JsValue) -> Result<AppleAccount, JsError> {
         let _ = isideload::init();
         let anisette_url = option(&options, "anisetteUrl")
@@ -140,8 +147,13 @@ impl AppleAccount {
         TWO_FACTOR.with(|c| *c.borrow_mut() = two_factor);
         let revoke = option(&options, "revokeCertificates").is_some_and(|v| v.is_truthy());
 
+        let client_info = AnisetteClientInfo {
+            client_info: option(&options, "clientInfo").and_then(|v| v.as_string()).unwrap_or_else(|| CLIENT_INFO.into()),
+            user_agent: option(&options, "userAgent").and_then(|v| v.as_string()).unwrap_or_else(|| USER_AGENT.into()),
+        };
         let anisette = RemoteV3AnisetteProvider::new(&anisette_url, Box::new(LocalStorage), "0".into())
-            .map_err(report_error)?;
+            .map_err(report_error)?
+            .set_client_info_override(Some(client_info));
         let mut account = Account::builder(&email)
             .anisette_provider(anisette)
             .login(&password, ask_two_factor)
