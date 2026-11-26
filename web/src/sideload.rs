@@ -9,7 +9,7 @@
 //! ```js
 //! const account = await AppleAccount.login(email, password, {
 //!   anisetteUrl: "https://ani.sidestore.io",
-//!   twoFactor: async (params) => ({ SubmitCode: await ask(params) }),  // or "SendToDevices", { SendSms: id }, "ResendCode", "Abort"
+//!   twoFactor: async (params) => ({ SubmitCode: await ask(params) }),  // or "SendToDevices" (new code), null (abort)
 //! });
 //! await account.install(device, ipaBytes, (fraction) => {});
 //! ```
@@ -127,8 +127,8 @@ pub struct AppleAccount {
 #[wasm_bindgen]
 impl AppleAccount {
     /// Signs in. `options`: `anisetteUrl` (a SideStore v3 anisette server),
-    /// `twoFactor(params)` (returns the code, `"SendToDevices"`, `{ SendSms: id }`,
-    /// `"ResendCode"` or null to abort), `revokeCertificates` (when the account
+    /// `twoFactor(params)` (returns the code, `"SendToDevices"` for a new code or null
+    /// to abort; codes go to trusted devices, not SMS), `revokeCertificates` (when the account
     /// already has the maximum number of development certificates, revoke the
     /// oldest instead of failing).
     pub async fn login(email: String, password: String, options: JsValue) -> Result<AppleAccount, JsError> {

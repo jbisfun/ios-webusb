@@ -36,7 +36,7 @@ Sign in with an Apple ID and sign + install ([isideload](https://github.com/nab1
 ```js
 const account = await AppleAccount.login(email, password, {
   anisetteUrl: "https://mac-ani.jkcoxson.com",            // SideStore v3 anisette server
-  twoFactor: async (params) => ({ SubmitCode: await askUser(params) }), // or "SendToDevices", { SendSms: id }, "ResendCode", null
+  twoFactor: async (params) => ({ SubmitCode: await askUser(params) }), // or "SendToDevices" (new code), null
   revokeCertificates: false,                             // revoke an old dev cert when the account is full
 });
 await account.install(device, ipaBytes, (fraction) => {}); // device + App IDs + profile, sign, install
