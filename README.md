@@ -25,6 +25,10 @@ await device.getValue("ProductVersion");
 const afc = await device.startService("com.apple.afc");    // TLS set up when needed
 await afc.write(bytes); const reply = await afc.read(65536);
 const lockdownd = await device.connect(62078);             // raw TCP; sendPlist/readPlist frame plists
+
+await device.apps("User");                                 // installation_proxy Lookup, keyed by bundle id
+await device.install(ipaBytes, (stage, percent) => {});    // AFC upload to PublicStaging + Install
+inspectIpa(ipaBytes);                                      // the IPA's Info.plist, no device needed
 ```
 
 Linux needs the udev rule so the browser can open the device, and nothing else may hold the device:

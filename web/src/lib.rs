@@ -7,8 +7,11 @@
 use std::cell::RefCell;
 use std::sync::Arc;
 
+use idevice::afc::AfcClient;
+use idevice::afc::opcode::AfcFopenMode;
 use idevice::pairing_file::PairingFile;
 use idevice::provider::IdeviceProvider;
+use idevice::services::installation_proxy::InstallationProxyClient;
 use idevice::services::lockdown::LockdownClient;
 use idevice::{Idevice, IdeviceService};
 use rusbmux::device::usb::UsbDevice;
@@ -17,6 +20,49 @@ use rusbmux::usb_backend::{APPLE_VID, AnyDeviceInfo, next_device_id};
 use wasm_bindgen::prelude::*;
 
 const LABEL: &str = "ios-webusb";
+const STAGING: &str = "PublicStaging";
+
+/// What an `.ipa` says about itself (`Payload/*.app/Info.plist`).
+struct IpaInfo {
+    bundle_id: String,
+    info: plist::Value,
+}
+
+fn ipa_info(ipa: &[u8]) -> Result<IpaInfo, JsError> {
+    use std::io::Read;
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(ipa)).map_err(js_error)?;
+    let name = archive
+        .file_names()
+        .find(|name| {
+            let parts: Vec<&str> = name.split('/').collect();
+            parts.len() == 3
+                && parts[0] == "Payload"
+                && parts[1].ends_with(".app")
+                && parts[2] == "Info.plist"
+        })
+        .map(str::to_owned)
+        .ok_or_else(|| JsError::new("not an .ipa: no Payload/*.app/Info.plist"))?;
+    let mut bytes = Vec::new();
+    archive
+        .by_name(&name)
+        .map_err(js_error)?
+        .read_to_end(&mut bytes)
+        .map_err(js_error)?;
+    let info = plist::Value::from_reader(std::io::Cursor::new(bytes)).map_err(js_error)?;
+    let bundle_id = info
+        .as_dictionary()
+        .and_then(|dict| dict.get("CFBundleIdentifier"))
+        .and_then(plist::Value::as_string)
+        .ok_or_else(|| JsError::new("Info.plist has no CFBundleIdentifier"))?
+        .to_owned();
+    Ok(IpaInfo { bundle_id, info })
+}
+
+/// Reads an `.ipa`'s `Info.plist` (as a plain object) without touching a device.
+#[wasm_bindgen(js_name = inspectIpa)]
+pub fn inspect_ipa(ipa: &[u8]) -> Result<JsValue, JsError> {
+    to_js(&ipa_info(ipa)?.info)
+}
 
 #[wasm_bindgen(start)]
 fn start() {
@@ -156,6 +202,87 @@ impl IosDevice {
                 .map_err(js_error)?;
         }
         Ok(DeviceStream(idevice))
+    }
+
+    /// Installed apps from installation_proxy, keyed by bundle id. `kind` is
+    /// `"User"` (default), `"System"` or `"Any"`. Requires `pair`.
+    pub async fn apps(&self, kind: Option<String>) -> Result<JsValue, JsError> {
+        let provider = self.provider();
+        let mut proxy = InstallationProxyClient::connect(&provider)
+            .await
+            .map_err(js_error)?;
+        let apps = proxy
+            .get_apps(Some(kind.as_deref().unwrap_or("User")), None)
+            .await
+            .map_err(js_error)?;
+        to_js(&plist::Value::Dictionary(apps.into_iter().collect()))
+    }
+
+    /// Uploads an `.ipa` to `PublicStaging` over AFC and installs it with
+    /// installation_proxy. `progress(stage, percent)` is called with stage
+    /// `"upload"` then `"install"`. The IPA must already be signed for this device.
+    /// Requires `pair`.
+    pub async fn install(
+        &self,
+        ipa: Vec<u8>,
+        progress: Option<js_sys::Function>,
+    ) -> Result<(), JsError> {
+        let report = |stage: &str, percent: u64| {
+            if let Some(progress) = &progress {
+                let _ = progress.call2(
+                    &JsValue::NULL,
+                    &JsValue::from_str(stage),
+                    &JsValue::from_f64(percent as f64),
+                );
+            }
+        };
+        let info = ipa_info(&ipa)?;
+        let provider = self.provider();
+
+        let mut afc = AfcClient::connect(&provider).await.map_err(js_error)?;
+        if afc.get_file_info(STAGING).await.is_err() {
+            afc.mk_dir(STAGING).await.map_err(js_error)?;
+        }
+        let remote = format!("{STAGING}/ferry.ipa");
+        let mut file = afc
+            .open(remote.clone(), AfcFopenMode::WrOnly)
+            .await
+            .map_err(js_error)?;
+        let total = ipa.len().max(1);
+        let mut written = 0;
+        for chunk in ipa.chunks(1 << 20) {
+            if let Err(error) = file.write_entire(chunk).await {
+                let _ = file.close().await;
+                return Err(js_error(error));
+            }
+            written += chunk.len();
+            report("upload", (written * 100 / total) as u64);
+        }
+        file.close().await.map_err(js_error)?;
+
+        let mut proxy = InstallationProxyClient::connect(&provider)
+            .await
+            .map_err(js_error)?;
+        let options = plist::Value::Dictionary(
+            [(
+                "CFBundleIdentifier".to_string(),
+                plist::Value::String(info.bundle_id),
+            )]
+            .into_iter()
+            .collect(),
+        );
+        proxy
+            .install_with_callback(
+                remote,
+                Some(options),
+                |(percent, ()): (u64, ())| {
+                    report("install", percent);
+                    async {}
+                },
+                (),
+            )
+            .await
+            .map_err(js_error)
     }
 
     /// Opens a raw TCP connection to `port` on the device (62078 is lockdownd).
