@@ -22,3 +22,6 @@ plist = "1.8"
 serde = "1"
 console_error_panic_hook = "0.1"
 tracing-wasm = "0.2"
+isideload = { version = "0.5.2", default-features = false, features = ["wasm", "install"] }
+isideload-vfs = "0.0.1"
+rootcause = "0.12"

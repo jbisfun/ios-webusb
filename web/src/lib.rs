@@ -19,6 +19,8 @@ use rusbmux::provider::RusbmuxProvider;
 use rusbmux::usb_backend::{APPLE_VID, AnyDeviceInfo, next_device_id};
 use wasm_bindgen::prelude::*;
 
+mod sideload;
+
 const LABEL: &str = "ios-webusb";
 const STAGING: &str = "PublicStaging";
 
@@ -70,7 +72,7 @@ fn start() {
     tracing_wasm::set_as_global_default();
 }
 
-fn js_error(error: impl std::fmt::Display) -> JsError {
+pub(crate) fn js_error(error: impl std::fmt::Display) -> JsError {
     JsError::new(&error.to_string())
 }
 
@@ -126,7 +128,12 @@ impl IosDevice {
         self.device.udid.clone()
     }
 
-    fn provider(&self) -> RusbmuxProvider {
+    /// The pair record in use, serialized (embedded into SideStore-style apps).
+    pub(crate) fn pairing_record(&self) -> Result<Option<Vec<u8>>, JsError> {
+        self.pairing.borrow().as_ref().map(|p| p.clone().serialize().map_err(js_error)).transpose()
+    }
+
+    pub(crate) fn provider(&self) -> RusbmuxProvider {
         let mut provider = RusbmuxProvider::new(Arc::clone(&self.device), LABEL.into());
         if let Some(pairing) = self.pairing.borrow().clone() {
             provider.set_pairing_file(pairing);
