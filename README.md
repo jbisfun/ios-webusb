@@ -31,6 +31,22 @@ await device.install(ipaBytes, (stage, percent) => {});    // AFC upload to Publ
 inspectIpa(ipaBytes);                                      // the IPA's Info.plist, no device needed
 ```
 
+Sign in with an Apple ID and sign + install ([isideload](https://github.com/nab138/isideload), `wasm` feature):
+
+```js
+const account = await AppleAccount.login(email, password, {
+  anisetteUrl: "https://mac-ani.jkcoxson.com",            // SideStore v3 anisette server
+  twoFactor: async (params) => ({ SubmitCode: await askUser(params) }), // or "SendToDevices", { SendSms: id }, "ResendCode", null
+  revokeCertificates: false,                             // revoke an old dev cert when the account is full
+});
+await account.install(device, ipaBytes, (fraction) => {}); // device + App IDs + profile, sign, install
+```
+
+isideload uses the page's `fetch` for Apple and the anisette server, which send no CORS
+headers: the page must route cross-origin requests itself (ferry-webinstaller replaces
+`fetch` with libcurl.js over a Wisp relay). Its state (anisette identity, development
+certificate and key, team) is kept in `localStorage` under `isideload:`.
+
 Linux needs the udev rule so the browser can open the device, and nothing else may hold the device:
 
 ```sh
